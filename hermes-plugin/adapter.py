@@ -721,6 +721,51 @@ class ZaloAdapter(BasePlatformAdapter):
         metadata: Optional[Dict[str, Any]] = None,
     ):
         thread_type = self._thread_type_from_chat_id(chat_id, metadata)
+        format_payload = None
+        if metadata and isinstance(metadata.get("format"), dict):
+            format_payload = metadata.get("format")
+
+        if format_payload is not None:
+            raw_segments = format_payload.get("segments")
+            can_send_formatted = (
+                format_payload.get("version") == 1
+                and isinstance(raw_segments, list)
+                and len(self.truncate_message(content, max_length=self.max_message_length)) == 1
+            )
+            if can_send_formatted:
+                normalized_segments = []
+                for segment in raw_segments:
+                    if not isinstance(segment, dict) or not isinstance(segment.get("text"), str):
+                        can_send_formatted = False
+                        break
+                    styles = segment.get("styles") or []
+                    if not isinstance(styles, list) or any(not isinstance(style, str) for style in styles):
+                        can_send_formatted = False
+                        break
+                    normalized_segments.append({"text": segment["text"], "styles": list(styles)})
+
+                if can_send_formatted and "".join(segment["text"] for segment in normalized_segments) == content:
+                    res = await self._post(
+                        "/send",
+                        {
+                            "threadId": chat_id,
+                            "threadType": thread_type,
+                            "text": content,
+                            "format": {"version": 1, "segments": normalized_segments},
+                        },
+                    )
+                    if res.get("error"):
+                        return SendResult(success=False, error=res["error"])
+                    msg_id = None
+                    result = res.get("result") if isinstance(res, dict) else None
+                    if isinstance(result, dict):
+                        msg = result.get("message")
+                        if isinstance(msg, dict) and msg.get("msgId") is not None:
+                            msg_id = str(msg.get("msgId"))
+                        elif result.get("msgId") is not None:
+                            msg_id = str(result.get("msgId"))
+                    return SendResult(success=True, message_id=msg_id)
+
         # Split long messages.
         chunks = self.truncate_message(content, max_length=self.max_message_length)
         last = None

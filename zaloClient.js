@@ -22,6 +22,66 @@ const AUTO_RELOGIN_BASE_MS = 5_000;
 const AUTO_RELOGIN_MAX_MS = 60_000;
 const MAX_AUTO_RELOGIN_ATTEMPTS = 5;
 
+const SUPPORTED_FORMAT_VERSION = 1;
+const SUPPORTED_SEGMENT_STYLES = new Set();
+
+function normalizeFormatPayload(format) {
+  if (format == null) return null;
+  if (typeof format !== "object" || Array.isArray(format)) {
+    throw new Error("format must be an object");
+  }
+  if (format.version !== SUPPORTED_FORMAT_VERSION) {
+    throw new Error(`format.version must be ${SUPPORTED_FORMAT_VERSION}`);
+  }
+  if (!Array.isArray(format.segments)) {
+    throw new Error("format.segments must be an array");
+  }
+
+  const segments = format.segments.map((segment, index) => {
+    if (typeof segment !== "object" || segment == null || Array.isArray(segment)) {
+      throw new Error(`format.segments[${index}] must be an object`);
+    }
+    if (typeof segment.text !== "string") {
+      throw new Error(`format.segments[${index}].text must be a string`);
+    }
+    if (segment.styles != null && !Array.isArray(segment.styles)) {
+      throw new Error(`format.segments[${index}].styles must be an array`);
+    }
+    const styles = (segment.styles || []).map((style, styleIndex) => {
+      if (typeof style !== "string") {
+        throw new Error(`format.segments[${index}].styles[${styleIndex}] must be a string`);
+      }
+      return style;
+    });
+    return { text: segment.text, styles };
+  });
+
+  return { version: SUPPORTED_FORMAT_VERSION, segments };
+}
+
+function flattenSegments(segments) {
+  return segments.map((segment) => segment.text).join("");
+}
+
+function buildVendorFormatContent(normalizedFormat) {
+  if (!normalizedFormat) return null;
+
+  const segments = normalizedFormat.segments
+    .map((segment) => ({
+      text: segment.text,
+      styles: segment.styles.filter((style) => SUPPORTED_SEGMENT_STYLES.has(style)),
+    }))
+    .filter((segment) => segment.text.length > 0);
+
+  const hasSupportedStyle = segments.some((segment) => segment.styles.length > 0);
+  if (!hasSupportedStyle) return null;
+
+  return {
+    version: normalizedFormat.version,
+    segments,
+  };
+}
+
 /**
  * Read image dimensions from a local file by parsing the header bytes.
  * Supports PNG, JPEG, GIF, WebP, BMP — no external deps. Returns null if
@@ -887,8 +947,17 @@ export class ZaloClient extends EventEmitter {
 
   // ── Outbound ──────────────────────────────────────────────────────────
 
-  async sendText(threadId, threadType, text, mentions, quote) {
+  async sendText(threadId, threadType, text, mentions, quote, format) {
+    const normalizedFormat = normalizeFormatPayload(format);
     const content = { msg: String(text) };
+    if (normalizedFormat) {
+      const flattenedText = flattenSegments(normalizedFormat.segments);
+      if (flattenedText !== content.msg) {
+        throw new Error("text must equal the flattened format.segments text");
+      }
+      const vendorFormat = buildVendorFormatContent(normalizedFormat);
+      if (vendorFormat) content.format = vendorFormat;
+    }
     if (Array.isArray(mentions) && mentions.length) content.mentions = mentions;
     if (quote) content.quote = quote;
     return await this.api.sendMessage(content, String(threadId), this._threadTypeEnum(threadType));

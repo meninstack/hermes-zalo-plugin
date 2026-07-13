@@ -202,7 +202,7 @@ rate-limit:
 - `GET  /events` → SSE stream (`event: message` / `status` / `session_dead` / `reaction` / `undo` / `friend_event` / `group_event`)
 - `POST /relogin` → `{ forceQR? }` recover a dead/expired session (re-run QR login; then poll `/qr.png` to scan)
 - `POST /shutdown` → graceful stop (closes listener, SSE, file streams, exits). SIGTERM/SIGINT do the same.
-- `POST /send` → `{ threadId, threadType: "user"|"group", text, mentions?, quote? }` (mentions = `[{pos,uid,len}]` for @mention; quote = a SendMessageQuote from an inbound message for replies)
+- `POST /send` → `{ threadId, threadType: "user"|"group", text, format?, mentions?, quote? }` (mentions = `[{pos,uid,len}]` for @mention; quote = a SendMessageQuote from an inbound message for replies; `format` = `{ version: 1, segments: [{ text, styles[] }] }`; `text` stays the canonical flattened string for backward compatibility/fallback, invalid `format` schema returns 400, unsupported styles degrade to plain text, and v1 may fall back to existing plain-text chunking for long messages)
 - `POST /react` → `{ threadId, threadType, msgId, cliMsgId?, icon }` (icon = HEART/LIKE/HAHA/WOW/CRY/ANGRY/… or raw)
 - `POST /undo` → `{ threadId, threadType, msgId }` (recall own message; bridge auto-resolves the real cliMsgId from the listener echo cache — just pass msgId)
 - `POST /send-card` → `{ threadId, threadType, userId, phoneNumber? }` (send a contact card / danh thiếp)

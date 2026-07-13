@@ -303,21 +303,26 @@ function requireLogin(res) {
   return true;
 }
 
-// Send text. Body: { threadId, threadType, text, mentions?, quote? }
+// Send text. Body: { threadId, threadType, text, format?, mentions?, quote? }
 //   mentions: [{ pos, uid, len }]  — group @mention
 //   quote:    SendMessageQuote captured from an inbound message (reply)
+//   format:   { version: 1, segments: [{ text, styles[] }] } (optional)
 app.post("/send", async (req, res) => {
   if (!checkAuth(req, res)) return;
   if (!requireLogin(res)) return;
-  const { threadId, threadType = "user", text, mentions, quote } = req.body || {};
+  const { threadId, threadType = "user", text, format, mentions, quote } = req.body || {};
   if (!threadId || text == null) {
     return res.status(400).json({ error: "threadId and text required" });
   }
   try {
-    const r = await client.sendText(threadId, threadType, text, mentions, quote);
+    const r = await client.sendText(threadId, threadType, text, mentions, quote, format);
     res.json({ success: true, result: r });
   } catch (e) {
-    res.status(500).json({ error: String(e && e.message ? e.message : e) });
+    const msg = String(e && e.message ? e.message : e);
+    if (msg.startsWith("format") || msg.startsWith("text must equal")) {
+      return res.status(400).json({ error: msg });
+    }
+    res.status(500).json({ error: msg });
   }
 });
 

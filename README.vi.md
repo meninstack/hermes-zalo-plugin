@@ -204,7 +204,7 @@ nghi bị rate-limit:
 - `GET  /events` → luồng SSE (`event: message` / `status` / `session_dead` / `reaction` / `undo` / `friend_event` / `group_event`)
 - `POST /relogin` → `{ forceQR? }` khôi phục phiên chết/hết hạn (chạy lại đăng nhập QR; rồi poll `/qr.png` để quét)
 - `POST /shutdown` → dừng êm (đóng listener, SSE, file stream, thoát). SIGTERM/SIGINT cũng vậy.
-- `POST /send` → `{ threadId, threadType: "user"|"group", text, mentions?, quote? }` (mentions = `[{pos,uid,len}]` để @nhắc; quote = một SendMessageQuote từ tin đến để trả lời)
+- `POST /send` → `{ threadId, threadType: "user"|"group", text, format?, mentions?, quote? }` (mentions = `[{pos,uid,len}]` để @nhắc; quote = một SendMessageQuote từ tin đến để trả lời; `format` = `{ version: 1, segments: [{ text, styles[] }] }`; `text` vẫn là chuỗi đã flatten canonical để giữ tương thích ngược/fallback, schema `format` không hợp lệ thì trả 400, style không hỗ trợ sẽ hạ cấp về plain text, và v1 được phép rơi về chunking plain-text hiện tại cho tin dài)
 - `POST /react` → `{ threadId, threadType, msgId, cliMsgId?, icon }` (icon = HEART/LIKE/HAHA/WOW/CRY/ANGRY/… hoặc raw)
 - `POST /undo` → `{ threadId, threadType, msgId }` (thu hồi tin của mình; bridge tự tra cliMsgId thật từ cache echo của listener — chỉ cần truyền msgId)
 - `POST /send-card` → `{ threadId, threadType, userId, phoneNumber? }` (gửi danh thiếp)
