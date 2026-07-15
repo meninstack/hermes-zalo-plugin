@@ -584,7 +584,9 @@ class ZaloAdapter(BasePlatformAdapter):
         message_type = MessageType.TEXT
         media = m.get("media")
         if isinstance(media, dict) and media.get("url"):
-            local_path, mtype = await self._download_media(media)
+            local_path, mtype = await self._download_media(
+                media, message_id=str(m.get("messageId") or ""), thread_id=thread_id
+            )
             if local_path:
                 media_urls.append(local_path)
                 media_types.append(media.get("mime") or "")
@@ -602,7 +604,12 @@ class ZaloAdapter(BasePlatformAdapter):
         )
         await self.handle_message(event)
 
-    async def _download_media(self, media: Dict[str, Any]) -> tuple[Optional[str], "MessageType"]:
+    async def _download_media(
+        self,
+        media: Dict[str, Any],
+        message_id: str = "",
+        thread_id: str = "",
+    ) -> tuple[Optional[str], "MessageType"]:
         """Download a media URL to the Hermes cache. Returns (path, MessageType)."""
         import aiohttp
 
@@ -612,16 +619,33 @@ class ZaloAdapter(BasePlatformAdapter):
         file_name = media.get("fileName") or f"zalo.{ext}"
         if not url or not self._session or self._session.closed:
             return None, MessageType.TEXT
+        # Zalo's CDN rejects bare requests for some media (e.g. photo hosts);
+        # a browser-like UA/Referer/Accept mirrors the authenticated session
+        # enough to get served without adding a separate proxy layer.
+        headers = {
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+            ),
+            "Referer": "https://chat.zalo.me/",
+            "Accept": "*/*",
+        }
         try:
             async with self._session.get(
-                url, timeout=aiohttp.ClientTimeout(total=120)
+                url, timeout=aiohttp.ClientTimeout(total=120), headers=headers
             ) as resp:
                 if resp.status != 200:
-                    logger.warning("Zalo: media download failed (%s) for %s", resp.status, kind)
+                    logger.warning(
+                        "Zalo: media download failed kind=%s status=%s message_id=%s thread_id=%s reason=http_status",
+                        kind, resp.status, message_id, thread_id,
+                    )
                     return None, MessageType.TEXT
                 data = await resp.read()
         except Exception as e:
-            logger.warning("Zalo: media download error for %s: %s", kind, e)
+            logger.warning(
+                "Zalo: media download error kind=%s message_id=%s thread_id=%s reason=request_exception exception=%s",
+                kind, message_id, thread_id, e,
+            )
             return None, MessageType.TEXT
 
         try:
@@ -634,7 +658,10 @@ class ZaloAdapter(BasePlatformAdapter):
             # file and anything else → document
             return cache_document_from_bytes(data, file_name), MessageType.DOCUMENT
         except Exception as e:
-            logger.warning("Zalo: failed to cache media (%s): %s", kind, e)
+            logger.warning(
+                "Zalo: failed to cache media kind=%s message_id=%s thread_id=%s reason=cache_exception exception=%s",
+                kind, message_id, thread_id, e,
+            )
             return None, MessageType.TEXT
 
     def _is_addressed(self, m: Dict[str, Any], text: str) -> Optional[str]:
