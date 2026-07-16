@@ -31,5 +31,5 @@
 
 ## Notes
 
-- Requirements, validation rules, and the fixed 12-token style set were sourced directly from the approved contract at `.hermes/specs/issue-4/spec.md` (Techlead-approved, derived from the GitHub issue #4 body) — no open questions remained, so no [NEEDS CLARIFICATION] markers were needed.
+- Requirements, validation rules, and the fixed 13-token style set were sourced directly from the approved contract in GitHub issue #4 and materialized in `specs/001-richtext-send-styles/spec.md` — no open questions remained, so no [NEEDS CLARIFICATION] markers were needed.
 - All items pass on first validation pass.
