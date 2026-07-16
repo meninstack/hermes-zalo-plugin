@@ -96,7 +96,7 @@ An integrator that constructs a malformed or out-of-bounds `styles` array (bad t
 
 ## Assumptions
 
-- The set of supported style types is fixed to the twelve tokens already defined by the underlying messaging platform's style model (bold, italic, underline, strikethrough, four colors, two sizes, unordered list, ordered list, indent); no custom colors or sizes beyond this set are in scope.
+- The set of supported style types is fixed to the thirteen tokens already defined by the underlying messaging platform's style model (bold, italic, underline, strikethrough, four colors, two sizes, unordered list, ordered list, indent); no custom colors or sizes beyond this set are in scope.
 - Overlapping style ranges are permitted and are the caller's responsibility to reason about visually; the system does not attempt to detect or reject overlaps.
 - Manual verification against a real Zalo client is an acceptable acceptance method for visual-rendering criteria (SC-003), since automated rendering verification is out of scope for this feature.
 - This feature covers only the HTTP send-message contract; it does not extend to any downstream caller-side integration (e.g., adapter code that constructs requests) beyond documenting the new optional field.
