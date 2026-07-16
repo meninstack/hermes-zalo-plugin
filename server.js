@@ -14,6 +14,7 @@ import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { TextStyle } from "zca-js";
 import { ZaloClient } from "./zaloClient.js";
 import { ACTION_GROUPS, DEFAULT_GROUPS, ACTION_GROUP } from "./permissions.js";
 import { credentialsPath, qrPath, cliMsgDir } from "./paths.js";
@@ -303,18 +304,46 @@ function requireLogin(res) {
   return true;
 }
 
-// Send text. Body: { threadId, threadType, text, mentions?, quote? }
+// Validate the optional `styles` array of a /send request (all-or-nothing).
+// Returns { ok: true } or { ok: false, error } — never throws.
+export function validateStyles(styles, textLength) {
+  if (styles === undefined) return { ok: true };
+  if (!Array.isArray(styles)) return { ok: false, error: "styles must be an array" };
+  for (let i = 0; i < styles.length; i++) {
+    const s = styles[i] || {};
+    if (!Number.isInteger(s.start) || s.start < 0) {
+      return { ok: false, error: `invalid styles entry at index ${i}: start must be an integer >= 0` };
+    }
+    if (!Number.isInteger(s.len) || s.len < 1) {
+      return { ok: false, error: `invalid styles entry at index ${i}: len must be an integer >= 1` };
+    }
+    if (!Object.values(TextStyle).includes(s.type)) {
+      return { ok: false, error: `invalid styles entry at index ${i}: type must be one of the supported TextStyle values` };
+    }
+    if (s.start + s.len > textLength) {
+      return { ok: false, error: `invalid styles entry at index ${i}: start + len must not exceed text length` };
+    }
+  }
+  return { ok: true };
+}
+
+// Send text. Body: { threadId, threadType, text, mentions?, quote?, styles? }
 //   mentions: [{ pos, uid, len }]  — group @mention
 //   quote:    SendMessageQuote captured from an inbound message (reply)
+//   styles:   [{ start, len, type, indentSize? }]  — optional rich-text ranges
 app.post("/send", async (req, res) => {
   if (!checkAuth(req, res)) return;
   if (!requireLogin(res)) return;
-  const { threadId, threadType = "user", text, mentions, quote } = req.body || {};
+  const { threadId, threadType = "user", text, mentions, quote, styles } = req.body || {};
   if (!threadId || text == null) {
     return res.status(400).json({ error: "threadId and text required" });
   }
+  const validation = validateStyles(styles, String(text).length);
+  if (!validation.ok) {
+    return res.status(400).json({ error: validation.error });
+  }
   try {
-    const r = await client.sendText(threadId, threadType, text, mentions, quote);
+    const r = await client.sendText(threadId, threadType, text, mentions, quote, styles);
     res.json({ success: true, result: r });
   } catch (e) {
     res.status(500).json({ error: String(e && e.message ? e.message : e) });
@@ -697,4 +726,8 @@ async function gracefulShutdown(reason) {
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
-main();
+// Only auto-start when run directly (`node server.js`), not when imported
+// (e.g. by zaloClient.test.js to exercise validateStyles without a live server).
+if (import.meta.url === `file://${process.argv[1]}`) {
+  main();
+}

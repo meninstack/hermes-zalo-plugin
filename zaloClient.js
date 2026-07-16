@@ -5,7 +5,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { EventEmitter } from "node:events";
-import { Zalo, ThreadType, LoginQRCallbackEventType, Reactions } from "zca-js";
+import { Zalo, ThreadType, LoginQRCallbackEventType, Reactions, TextStyle } from "zca-js";
 
 const DEFAULT_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0";
@@ -887,10 +887,17 @@ export class ZaloClient extends EventEmitter {
 
   // ── Outbound ──────────────────────────────────────────────────────────
 
-  async sendText(threadId, threadType, text, mentions, quote) {
+  async sendText(threadId, threadType, text, mentions, quote, styles) {
     const content = { msg: String(text) };
     if (Array.isArray(mentions) && mentions.length) content.mentions = mentions;
     if (quote) content.quote = quote;
+    if (Array.isArray(styles) && styles.length) {
+      content.styles = styles.map((s) => {
+        const style = { start: s.start, len: s.len, st: s.type };
+        if (s.type === TextStyle.Indent && s.indentSize !== undefined) style.indentSize = s.indentSize;
+        return style;
+      });
+    }
     return await this.api.sendMessage(content, String(threadId), this._threadTypeEnum(threadType));
   }
 
